@@ -1,0 +1,13 @@
+﻿<wpf:ResourceDictionary xml:space="preserve" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:s="clr-namespace:System;assembly=mscorlib" xmlns:ss="urn:shemas-jetbrains-com:settings-storage-xaml" xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+	<s:String x:Key="/Default/CodeInspection/Highlighting/AnalysisEnabled/@EntryValue">SOLUTION</s:String>
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=357fc84b_002Db669_002D409c_002D8d5f_002Ded4f220356fe/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="CreateProduct_WithRealisticNameAndTag_Returns201" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;&#xD;
+  &lt;TestAncestor&gt;&#xD;
+    &lt;TestId&gt;xUnit::D0D388C6-DE65-418C-82B5-02FB1DB4B4D4::net8.0::Marketplace.Tests.CreateProductTests.Create_Product_ReturnsNotNullProduct&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::D0D388C6-DE65-418C-82B5-02FB1DB4B4D4::net8.0::Marketplace.Tests.CreateProductTests.Create_Product_AddsProductToStorage&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::D0D388C6-DE65-418C-82B5-02FB1DB4B4D4::net8.0::Marketplace.Tests.CreateProductTests.Create_ProductWithExistingArticle_ThrowsException&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::D0D388C6-DE65-418C-82B5-02FB1DB4B4D4::net8.0::Marketplace.Tests.CreateProductTests.Create_ProductWithExistingArticle_Returns409Conflict&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::D0D388C6-DE65-418C-82B5-02FB1DB4B4D4::net8.0::Marketplace.Tests.CreateProductTests.Create_Product_Returns201Created&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::D0D388C6-DE65-418C-82B5-02FB1DB4B4D4::net8.0::Marketplace.Tests.CreateProductTests.Create_ValidProduct_Returns201Created&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::D0D388C6-DE65-418C-82B5-02FB1DB4B4D4::net8.0::Marketplace.Tests.CreateProductTests.Create_InvalidProduct_ReturnsUnsuccessfulCode&lt;/TestId&gt;&#xD;
+  &lt;/TestAncestor&gt;&#xD;
+&lt;/SessionState&gt;</s:String></wpf:ResourceDictionary>
