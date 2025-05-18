@@ -6,115 +6,98 @@ using Marketplace.Client.Contracts;
 using Marketplace.Client.Exceptions;
 using Marketplace.Tests.Create.TestCaseEntities;
 using Marketplace.Tests.Create.TestCases;
-using Marketplace.Tests.TestCaseEntities;
+using Marketplace.Tests.TestCaseEntities; 
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
 using Xunit.Abstractions;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Marketplace.Tests.Create;
 
-/// <summary>
-///     Тесты на заведение товаров
-/// </summary>
-public class CreateProductTests : IClassFixture<WebApplicationFactory<Program>>
+
+namespace Marketplace.Tests.Create
 {
-    private readonly ITestOutputHelper _outputHelper;
-    private readonly WebApplicationFactory<Program> _applicationFactory;
-    private readonly Mock<TimeProvider> _timeProviderMock;
-
-    public CreateProductTests(ITestOutputHelper outputHelper, WebApplicationFactory<Program> applicationFactory)
-    {
-        _outputHelper = outputHelper;
-        _timeProviderMock = new Mock<TimeProvider>();
-        _applicationFactory = applicationFactory;
-    }
-
     /// <summary>
-    ///     Позитивные тест-кейсы
+    /// Тесты на заведение товаров
     /// </summary>
-    public static IEnumerable<object[]> PositiveTesCases()
+    public class CreateProductTests : IClassFixture<WebApplicationFactory<Program>>
     {
-        yield return new object[] { Create_Product_Returns201Created_AddsProductToDb.Get() };
-    }
+        private readonly ITestOutputHelper _output;
+        private readonly WebApplicationFactory<Program> _factory;
+        private readonly Mock<TimeProvider> _timeProviderMock;
 
-    [Theory]
-    [MemberData(nameof(PositiveTesCases))]
-    public async Task Create_ValidProduct_Returns201Created(CreateProductTestCase testCase)
-    {
-        _outputHelper.WriteLine(testCase.TestId);
-        _outputHelper.WriteLine(testCase.Description);
-
-        // ARRANGE 
-        ArrangeMocks(testCase.MocksData);
-
-        var httpClient = CreateClient();
-        var productsApiClient = new ProductsApiClient(httpClient);
-
-        // ACT
-        var response = await httpClient.PostAsJsonAsync("api/v1/Products", testCase.Parameters.NewProduct, CancellationToken.None);
-        var product = await response.Content.ReadFromJsonAsync<ProductDto>(CancellationToken.None);
-
-        // ASSERT
-        var actualProduct = await productsApiClient.GetAsync(product!.Id, CancellationToken.None);
-        response.StatusCode.Should().Be(testCase.Expectations.HttpStatusCode);
-        response.Headers.Location.Should().Be(string.Format(testCase.Expectations.LocationHeader!, arg0: product.Id));
-        actualProduct.Should().BeEquivalentTo(testCase.Expectations.Product, options => options.Excluding(dto => dto.Id));
-    }
-
-    [Theory]
-    [ClassData(typeof(CreateProductNegativeCases))]
-    public async Task Create_InvalidProduct_ReturnsUnsuccessfulCode(CreateProductTestCase testCase)
-    {
-        _outputHelper.WriteLine(testCase.TestId);
-        _outputHelper.WriteLine(testCase.Description);
-
-        // ARRANGE 
-        ArrangeMocks(testCase.MocksData);
-
-        var httpClient = CreateClient();
-        var productsApiClient = new ProductsApiClient(httpClient);
-
-        await ArrangeStorageState(testCase.ExistingProduct, productsApiClient);
-
-
-        // ACT
-        var error = await productsApiClient.Invoking(c => c.CreateAsync(testCase.Parameters.NewProduct, CancellationToken.None))
-                                           .Should()
-                                           .ThrowAsync<ApiException>();
-
-        // ASSERT
-        error.Which.Code.Should().Be(testCase.Expectations.HttpStatusCode);
-        error.Which.Message.Should().Be(testCase.Expectations.Error);
-    }
-
-    /// <summary>
-    ///     Настраивает состояние БД перед прогоном тестов
-    /// </summary>
-    private async Task ArrangeStorageState(CreateProductRequest? existingProduct, ProductsApiClient productsApiClient)
-    {
-        if (existingProduct != null) 
-        { 
-            await productsApiClient.CreateAsync(existingProduct, CancellationToken.None);
+        public CreateProductTests(ITestOutputHelper output, WebApplicationFactory<Program> factory)
+        {
+            _output = output;
+            _factory = factory;
+            _timeProviderMock = new Mock<TimeProvider>();
         }
-    }
 
-    /// <summary>
-    ///     Поднимает контект приложения, возвращает сконфигурированный клиент
-    /// </summary>
-    private HttpClient CreateClient()
-    {
-        return _applicationFactory.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton(_timeProviderMock.Object)))
-                                  .CreateClient();
-    }
+        [Theory(DisplayName = "CreateProduct_ValidInput_Returns201Created")]
+        [MemberData(nameof(GetPositiveCases))]
+        public async Task CreateProduct_ValidInput_Returns201Created(CreateProductTestCase testCase)
+        {
+            // Arrange:
+            _output.WriteLine(testCase.TestId);
+            _output.WriteLine(testCase.Description);
+            ArrangeMocks(testCase.MocksData);
+            var client = CreateClient();
+            var apiClient = new ProductsApiClient(client);
 
-    /// <summary>
-    ///     Настраивает моки
-    /// </summary>
-    private void ArrangeMocks(MocksData mocksData)
-    {
-        _timeProviderMock.Setup(provider => provider.GetUtcNow()).Returns(mocksData.UtcNow);
+            // Act:
+            var createdProduct = await apiClient.CreateAsync(testCase.Parameters.NewProduct, CancellationToken.None);
+            var fetchedProduct = await apiClient.GetAsync(createdProduct.Id, CancellationToken.None);
+
+            // Assert:
+            createdProduct.Should().NotBeNull();
+            createdProduct.Name.Should().Be(testCase.Expectations.Product.Name);
+            createdProduct.Price.Should().Be(testCase.Expectations.Product.Price);
+            createdProduct.Article.Should().Be(testCase.Expectations.Product.Article);
+            createdProduct.Category.Should().Be(testCase.Expectations.Product.Category);
+            fetchedProduct.Should().BeEquivalentTo(testCase.Expectations.Product, options => options.Excluding(dto => dto.Id));
+        }
+
+        [Theory(DisplayName = "CreateProduct_InvalidInput_ReturnsError")]
+        [ClassData(typeof(CreateProductNegativeCases))]
+        public async Task CreateProduct_InvalidInput_ReturnsError(CreateProductTestCase testCase)
+        {
+            // Arrange:
+            _output.WriteLine(testCase.TestId);
+            _output.WriteLine(testCase.Description);
+            ArrangeMocks(testCase.MocksData);
+            var client = CreateClient();
+            var apiClient = new ProductsApiClient(client);
+            if (testCase.ExistingProduct != null)
+            {
+                await apiClient.CreateAsync(testCase.ExistingProduct, CancellationToken.None);
+            }
+
+            // Act:
+            var exception = await Assert.ThrowsAsync<ApiException>(() =>
+                apiClient.CreateAsync(testCase.Parameters.NewProduct, CancellationToken.None));
+
+            // Assert:
+            exception.Code.Should().Be(testCase.Expectations.HttpStatusCode);
+            exception.Message.Should().Contain(testCase.Expectations.Error);
+        }
+
+        private HttpClient CreateClient()
+        {
+            return _factory.WithWebHostBuilder(b =>
+            {
+                b.ConfigureTestServices(services =>
+                {
+                    services.AddSingleton(_timeProviderMock.Object);
+                });
+            }).CreateClient();
+        }
+
+        private void ArrangeMocks(MocksData mocksData)
+        {
+            _timeProviderMock.Setup(tp => tp.GetUtcNow()).Returns(mocksData.UtcNow);
+        }
+
+        public static IEnumerable<object[]> GetPositiveCases => CreateProductPositiveCases.GetTestCases();
     }
 }

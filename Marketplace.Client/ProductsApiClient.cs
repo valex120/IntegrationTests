@@ -29,24 +29,25 @@ public class ProductsApiClient
     /// <param name="cancellationToken">Токен отмены операции</param>
     public async Task<ProductDto[]> ListAsync(ListProductsRequest request, CancellationToken cancellationToken)
     {
-        var query = new StringBuilder();
+        var queryParams = new List<string>();
         var encoder = UrlEncoder.Default;
-        if (string.IsNullOrEmpty(request.Name) is false)
-            query.Append($"name={encoder.Encode(request.Name)}&");
 
-        if (string.IsNullOrEmpty(request.Category) is false)
-            query.Append($"category={request.Category}&");
+        if (!string.IsNullOrEmpty(request.Name))
+            queryParams.Add($"name={encoder.Encode(request.Name)}");
+
+        if (!string.IsNullOrEmpty(request.Category))
+            queryParams.Add($"category={request.Category}");
 
         if (request.StartPrice is not null)
-            query.Append($"startprice={request.StartPrice}&");
+            queryParams.Add($"startprice={request.StartPrice}");
 
         if (request.EndPrice is not null)
-            query.Append($"endprice={request.EndPrice}");
+            queryParams.Add($"endprice={request.EndPrice}");
 
-        if (query.Length > 0)
-            query.Insert(0, "?");
+        var query = queryParams.Count > 0 ? $"?{string.Join("&", queryParams)}" : string.Empty;
 
         var response = await _httpClient.GetAsync($"api/v1/Products{query}", cancellationToken);
+
         await EnsureSuccess(response, cancellationToken);
         var result = await response.Content.ReadFromJsonAsync<ProductDto[]>(cancellationToken: cancellationToken);
         return result!;

@@ -2,94 +2,81 @@ using FluentAssertions;
 using Marketplace.Api;
 using Marketplace.Client;
 using Marketplace.Client.Exceptions;
+using Marketplace.Tests.Get.TestCaseEntities;
+using Marketplace.Tests.Get.TestCases;
 using Marketplace.Tests.TestCaseEntities;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
 using Xunit.Abstractions;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Marketplace.Tests.Get;
 
-/// <summary>
-///     Тесты на получение товаров
-/// </summary>
-public class GetProductTests : IClassFixture<WebApplicationFactory<Program>>
+namespace Marketplace.Tests.Get
 {
-    private readonly ITestOutputHelper _outputHelper;
-    private readonly WebApplicationFactory<Program> _applicationFactory;
-    private readonly Mock<TimeProvider> _timeProviderMock;
-
-    public GetProductTests(ITestOutputHelper outputHelper, WebApplicationFactory<Program> applicationFactory)
-    {
-        _outputHelper = outputHelper;
-        _applicationFactory = applicationFactory;
-        _timeProviderMock = new Mock<TimeProvider>();
-    }
-
-    [Fact]
-    public async Task Get_ExistingProduct_ReturnsProduct()
-    {
-        var testCase = TestCases.Get_ExistingProduct_ReturnsProduct.Get();
-        _outputHelper.WriteLine(testCase.TestId);
-        _outputHelper.WriteLine(testCase.Description);
-
-        // ARRANGE 
-        ArrangeMocks(testCase.MocksData);
-        var productsApiClient = CreateClient();
-        var product = await productsApiClient.CreateAsync(testCase.ExistingProduct, CancellationToken.None);
-
-        // ACT
-        var actualProduct = await productsApiClient.GetAsync(product.Id, CancellationToken.None);
-
-        // ASSERT
-        actualProduct.Should().BeEquivalentTo(testCase.Expectations.Product, options => options.Excluding(dto => dto.Id));
-    }
-
-    [Fact]
-    public async Task Get_NonExistingProduct_Returns404NotFound()
-    {
-        var testCase = TestCases.Get_NonExistingProduct_Returns404NotFound.Get();
-        _outputHelper.WriteLine(testCase.TestId);
-        _outputHelper.WriteLine(testCase.Description);
-
-        // ARRANGE 
-        var productsApiClient = CreateClient();
-
-        // ACT
-        var product = await productsApiClient.GetAsync(testCase.Parameters.ProductId, CancellationToken.None);
-
-        // ASSERT
-        product.Should().BeNull();
-    }
-
     /// <summary>
-    ///     Настраивает состояние БД перед прогоном тестов
+    /// Тесты на получение товаров
     /// </summary>
-    private async Task ArrangeStorageState(ProductsStorageState storageState, ProductsApiClient productsApiClient)
+    public class GetProductTests : IClassFixture<WebApplicationFactory<Program>>
     {
-        foreach (var product in storageState.Products)
+        private readonly ITestOutputHelper _output;
+        private readonly WebApplicationFactory<Program> _factory;
+        private readonly Mock<TimeProvider> _timeProviderMock;
+
+        public GetProductTests(ITestOutputHelper output, WebApplicationFactory<Program> factory)
         {
-            await productsApiClient.CreateAsync(product, CancellationToken.None);
+            _output = output;
+            _factory = factory;
+            _timeProviderMock = new Mock<TimeProvider>();
         }
-    }
 
-    /// <summary>
-    ///     Поднимает контект приложения, возвращает сконфигурированный клиент
-    /// </summary>
-    private ProductsApiClient CreateClient()
-    {
-        var httpClient = _applicationFactory.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton(_timeProviderMock.Object)))
-                                  .CreateClient();
-        return new ProductsApiClient(httpClient);
-    }
+        [Fact(DisplayName = "GetProduct_Existing_ReturnsProduct")]
+        public async Task GetProduct_Existing_ReturnsProduct()
+        {
+            // Arrange:
+            var testCase = Get_ExistingProduct_ReturnsProduct.Get();
+            _output.WriteLine(testCase.TestId);
+            _output.WriteLine(testCase.Description);
+            ArrangeMocks(testCase.MocksData);
+            var apiClient = CreateClient();
 
-    /// <summary>
-    ///     Настраивает моки
-    /// </summary>
-    private void ArrangeMocks(MocksData mocksData)
-    {
-        _timeProviderMock.Setup(provider => provider.GetUtcNow()).Returns(mocksData.UtcNow);
+            // Act:
+            var createdProduct = await apiClient.CreateAsync(testCase.ExistingProduct, CancellationToken.None);
+            var fetchedProduct = await apiClient.GetAsync(createdProduct.Id, CancellationToken.None);
+
+            // Assert:
+            fetchedProduct.Should().BeEquivalentTo(testCase.Expectations.Product,
+                options => options.Excluding(dto => dto.Id));
+        }
+
+        [Fact(DisplayName = "GetProduct_NonExisting_Returns404")]
+        public async Task GetProduct_NonExisting_Returns404()
+        {
+            // Arrange:
+            var testCase = Get_NonExistingProduct_Returns404NotFound.Get();
+            _output.WriteLine(testCase.TestId);
+            _output.WriteLine(testCase.Description);
+            var apiClient = CreateClient();
+
+            // Act:
+            var fetchedProduct = await apiClient.GetAsync(testCase.Parameters.ProductId, CancellationToken.None);
+
+            // Assert:
+            fetchedProduct.Should().BeNull();
+        }
+
+        private ProductsApiClient CreateClient()
+        {
+            var httpClient = _factory.WithWebHostBuilder(b => b.ConfigureTestServices(services =>
+                services.AddSingleton(_timeProviderMock.Object)))
+                .CreateClient();
+            return new ProductsApiClient(httpClient);
+        }
+
+        private void ArrangeMocks(MocksData mocksData)
+        {
+            _timeProviderMock.Setup(tp => tp.GetUtcNow()).Returns(mocksData.UtcNow);
+        }
     }
 }

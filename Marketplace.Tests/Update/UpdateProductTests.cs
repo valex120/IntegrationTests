@@ -1,92 +1,62 @@
-using FluentAssertions;
-using Marketplace.Api;
-using Marketplace.Client;
-using Marketplace.Client.Exceptions;
+using Marketplace.Client.Contracts;
 using Marketplace.Tests.TestCaseEntities;
 using Marketplace.Tests.Update.TestCaseEntities;
-using Marketplace.Tests.Update.TestCases;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
-using Moq;
-using Xunit;
-using Xunit.Abstractions;
+using Marketplace.Api.Mappers;
+using Marketplace.Tests.Utils;
+using System;
 
-namespace Marketplace.Tests.Update;
-
-/// <summary>
-///     Тесты на удаление товаров
-/// </summary>
-public class UpdateProductTests : IClassFixture<WebApplicationFactory<Program>>
+namespace Marketplace.Tests.Update.TestCases
 {
-    private readonly ITestOutputHelper _outputHelper;
-    private readonly WebApplicationFactory<Program> _applicationFactory;
-    private readonly Mock<TimeProvider> _timeProviderMock;
-
-    public UpdateProductTests(ITestOutputHelper outputHelper, WebApplicationFactory<Program> applicationFactory)
-    {
-        _outputHelper = outputHelper;
-        _applicationFactory = applicationFactory;
-        _timeProviderMock = new Mock<TimeProvider>();
-    }
-
-    [Fact]
-    public async Task Update_ValidParameters_UpdatesProduct()
-    {
-        var testCase = TestCases.Update_ValidParameters_UpdatesProduct.Get();
-        _outputHelper.WriteLine(testCase.TestId);
-        _outputHelper.WriteLine(testCase.Description);
-
-        // ARRANGE 
-        ArrangeMocks(testCase.MocksData);
-        var productsApiClient = CreateClient();
-        var product = await productsApiClient.CreateAsync(testCase.ExistingProduct, CancellationToken.None);
-        testCase.Parameters.UpdateRequest.Id = product.Id;
-
-        // ACT
-        await productsApiClient.UpdateAsync(testCase.Parameters.UpdateRequest, CancellationToken.None);
-
-        // ASSERT
-        var actualProduct = await productsApiClient.GetAsync(testCase.Parameters.UpdateRequest.Id, CancellationToken.None);
-        actualProduct.Should().BeEquivalentTo(testCase.Expectations.Product, options => options.Excluding(dto => dto.Id));
-    }
-
-    [Theory]
-    [ClassData(typeof(UpdateProductNegativeCases))]
-    public async Task Update_InvalidParameters_ThrowsAsync(UpdateProductTestCase testCase)
-    {
-        _outputHelper.WriteLine(testCase.TestId);
-        _outputHelper.WriteLine(testCase.Description);
-
-        // ARRANGE 
-        var httpClient = _applicationFactory.CreateClient();
-        var productsApiClient = new ProductsApiClient(httpClient);
-
-        // ACT
-        var error = await productsApiClient.Invoking(c => c.UpdateAsync(testCase.Parameters.UpdateRequest, CancellationToken.None))
-                                           .Should()
-                                           .ThrowAsync<ApiException>();
-
-        // ASSERT
-        error.Which.Code.Should().Be(testCase.Expectations.HttpStatusCode);
-        error.Which.Message.Should().Be(testCase.Expectations.Error);
-    }
-
     /// <summary>
-    ///     Поднимает контект приложения, возвращает сконфигурированный клиент
+    /// Update. Переданы корректные данные. Обновляет данные товара.
     /// </summary>
-    private ProductsApiClient CreateClient()
+    public class Update_ValidParameters_ReturnsProduct
     {
-        var httpClient = _applicationFactory.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton(_timeProviderMock.Object)))
-                                  .CreateClient();
-        return new ProductsApiClient(httpClient);
-    }
+        private const string TestId = "Update_ValidParameters_ReturnsProduct";
+        private const string Description = @"
+Update. Переданы корректные данные. Обновляет данные товара.
 
-    /// <summary>
-    ///     Настраивает моки
-    /// </summary>
-    private void ArrangeMocks(MocksData mocksData)
-    {
-        _timeProviderMock.Setup(provider => provider.GetUtcNow()).Returns(mocksData.UtcNow);
+Состояние БД:
+    - создан товар с фиксированным артикулом ""ABCDEFGHIJ""
+Входящие параметры:
+    - обновляются только Name, Price, Category (Article не изменяется)
+Ожидаемые значения:
+    - После обновления Article равен ""ABCDEFGHIJ""
+";
+
+        public static UpdateProductTestCase Get()
+        {
+            var now = DateTimeOffset.UtcNow.Truncate();
+            const string fixedArticle = "ABCDEFGHIJ";  
+            var existingProduct = new CreateProductRequest
+            {
+                Article = fixedArticle,
+                Name = "Old Product Name",
+                Price = 10000,
+                Category = "Children"
+            };
+
+            var updateRequest = new UpdateProductRequest
+            {
+                Name = "Updated Product Name",
+                Price = 20000,
+                Category = "Women"
+            };
+
+            var expectedProduct = updateRequest.MapToEntity();
+            expectedProduct.Article = fixedArticle;
+            expectedProduct.CreatedAt = now;
+            expectedProduct.UpdatedAt = now;
+
+            return new UpdateProductTestCase
+            {
+                TestId = TestId,
+                Description = Description,
+                ExistingProduct = existingProduct,
+                MocksData = new MocksData { UtcNow = now },
+                Parameters = new UpdateProductTestCaseParameters { UpdateRequest = updateRequest },
+                Expectations = new UpdateProductTestCaseExpectations { Product = expectedProduct.MapToDto() }
+            };
+        }
     }
 }

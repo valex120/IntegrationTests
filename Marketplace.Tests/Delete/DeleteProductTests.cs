@@ -2,64 +2,67 @@ using FluentAssertions;
 using Marketplace.Api;
 using Marketplace.Client;
 using Marketplace.Client.Exceptions;
+using Marketplace.Tests.TestCaseEntities;
+using Marketplace.Tests.Delete.TestCases;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Marketplace.Tests.Delete;
-
-/// <summary>
-///     Тесты на удаление товаров
-/// </summary>
-public class DeleteProductTests : IClassFixture<WebApplicationFactory<Program>>
+namespace Marketplace.Tests.Delete
 {
-    private readonly ITestOutputHelper _outputHelper;
-    private readonly WebApplicationFactory<Program> _applicationFactory;
-
-    public DeleteProductTests(ITestOutputHelper outputHelper, WebApplicationFactory<Program> applicationFactory)
+    /// <summary>
+    /// Тесты на удаление товаров
+    /// </summary>
+    public class DeleteProductTests : IClassFixture<WebApplicationFactory<Program>>
     {
-        _outputHelper = outputHelper;
-        _applicationFactory = applicationFactory;
-    }
+        private readonly ITestOutputHelper _output;
+        private readonly WebApplicationFactory<Program> _factory;
 
-    [Fact]
-    public async Task Delete_ExistingProduct_DeletesProduct()
-    {
-        var testCase = TestCases.Delete_ExistingProduct_DeletesProduct.Get();
-        _outputHelper.WriteLine(testCase.TestId);
-        _outputHelper.WriteLine(testCase.Description);
+        public DeleteProductTests(ITestOutputHelper output, WebApplicationFactory<Program> factory)
+        {
+            _output = output;
+            _factory = factory;
+        }
 
-        // ARRANGE 
-        var httpClient = _applicationFactory.CreateClient();
-        var productsApiClient = new ProductsApiClient(httpClient);
-        var product = await productsApiClient.CreateAsync(testCase.ExistingProduct, CancellationToken.None);
+        [Fact(DisplayName = "DeleteProduct_Existing_DeletesProduct")]
+        public async Task DeleteProduct_Existing_DeletesProduct()
+        {
+            // Arrange:
+            var testCase = Delete_ExistingProduct_DeletesProduct.Get();
+            _output.WriteLine(testCase.TestId);
+            _output.WriteLine(testCase.Description);
+            var apiClient = CreateClient();
+            var createdProduct = await apiClient.CreateAsync(testCase.ExistingProduct, CancellationToken.None);
 
-        // ACT
-        await productsApiClient.DeleteAsync(product.Id, CancellationToken.None);
+            // Act:
+            await apiClient.DeleteAsync(createdProduct.Id, CancellationToken.None);
 
-        // ASSERT
-        var actualProduct = await productsApiClient.GetAsync(product.Id, CancellationToken.None);
-        actualProduct.Should().BeNull();
-    }
+            // Assert:
+            var fetchedProduct = await apiClient.GetAsync(createdProduct.Id, CancellationToken.None);
+            fetchedProduct.Should().BeNull();
+        }
 
-    [Fact]
-    public async Task Delete_NonExistingProduct_Returns404NotFound()
-    {
-        var testCase = TestCases.Delete_NonExistingProduct_Returns404NotFound.Get();
-        _outputHelper.WriteLine(testCase.TestId);
-        _outputHelper.WriteLine(testCase.Description);
+        [Fact(DisplayName = "DeleteProduct_NonExisting_Returns404")]
+        public async Task DeleteProduct_NonExisting_Returns404()
+        {
+            // Arrange
+            var testCase = Delete_NonExistingProduct_Returns404NotFound.Get();
+            _output.WriteLine(testCase.TestId);
+            _output.WriteLine(testCase.Description);
+            var apiClient = CreateClient();
 
-        // ARRANGE 
-        var httpClient = _applicationFactory.CreateClient();
-        var productsApiClient = new ProductsApiClient(httpClient);
+            // Act
+            var exception = await Assert.ThrowsAsync<ApiException>(() =>
+                apiClient.DeleteAsync(testCase.Parameters.ProductId, CancellationToken.None));
+            // Assert
+            exception.Code.Should().Be(testCase.Expectations.HttpStatusCode);
+            exception.Message.Should().Be(testCase.Expectations.Error);
+        }
 
-        // ACT
-        var error = await productsApiClient.Invoking(c => c.DeleteAsync(testCase.Parameters.ProductId, CancellationToken.None))
-                                           .Should()
-                                           .ThrowAsync<ApiException>();
-
-        // ASSERT
-        error.Which.Code.Should().Be(testCase.Expectations.HttpStatusCode);
-        error.Which.Message.Should().Be(testCase.Expectations.Error);
+        private ProductsApiClient CreateClient()
+        {
+            var httpClient = _factory.CreateClient();
+            return new ProductsApiClient(httpClient);
+        }
     }
 }
