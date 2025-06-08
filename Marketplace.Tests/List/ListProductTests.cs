@@ -7,108 +7,88 @@ using Marketplace.Tests.List.TestCaseEntities;
 using Marketplace.Tests.List.TestCases;
 using Marketplace.Tests.TestCaseEntities;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
 using Xunit.Abstractions;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Marketplace.Tests.List;
 
-/// <summary>
-///     Тесты на поиск товаров
-/// </summary>
-public class ListProductTests : IClassFixture<WebApplicationFactory<Program>>
+namespace Marketplace.Tests.List
 {
-    private readonly ITestOutputHelper _outputHelper;
-    private readonly WebApplicationFactory<Program> _applicationFactory;
-    private readonly Mock<TimeProvider> _timeProviderMock;
-
-    public ListProductTests(ITestOutputHelper outputHelper, WebApplicationFactory<Program> applicationFactory)
+    /// <summary>
+    /// Тесты на поиск товаров
+    /// </summary>
+    public class ListProductTests : IClassFixture<WebApplicationFactory<Program>>
     {
-        _outputHelper = outputHelper;
-        _applicationFactory = applicationFactory;
-        _timeProviderMock = new Mock<TimeProvider>();
-    }
+        private readonly ITestOutputHelper _output;
+        private readonly WebApplicationFactory<Program> _factory;
+        private readonly Mock<TimeProvider> _timeProviderMock;
 
-    [Theory]
-    [ClassData(typeof(ListProductsPositiveCases))]
-    public async Task List_ValidParamaters_ReturnsProducts(ListProductTestCase testCase)
-    {
-        _outputHelper.WriteLine(testCase.TestId);
-        _outputHelper.WriteLine(testCase.Description);
-
-        // ARRANGE 
-        ArrangeMocks(testCase.MocksData);
-        var productsApiClient = CreateClient();
-        var products = await ArrangeStorageState(testCase.StorageState, productsApiClient);
-
-        // ACT
-        var actualProducts = await productsApiClient.ListAsync(testCase.Parameters.Request, CancellationToken.None);
-
-        // ASSERT
-        foreach ( var product in testCase.Expectations.IncludedProducts)
+        public ListProductTests(ITestOutputHelper output, WebApplicationFactory<Program> factory)
         {
-            actualProducts.Should().ContainEquivalentOf(product, options => options.Excluding(dto => dto.Id));
+            _output = output;
+            _factory = factory;
+            _timeProviderMock = new Mock<TimeProvider>();
         }
 
-        foreach (var product in testCase.Expectations.ExcludedProducts)
+        [Theory(DisplayName = "ListProduct_ValidParams_ReturnsExpectedProducts")]
+        [ClassData(typeof(ListProductsPositiveCases))]
+        public async Task ListProduct_ValidParams_ReturnsExpectedProducts(ListProductTestCase testCase)
         {
-            actualProducts.Should().NotContainEquivalentOf(product, options => options.Excluding(dto => dto.Id));
-        }
-    }
+            // Arrange:
+            _output.WriteLine(testCase.TestId);
+            _output.WriteLine(testCase.Description);
+            ArrangeMocks(testCase.MocksData);
+            var apiClient = CreateClient();
+            foreach (var product in testCase.StorageState.Products)
+            {
+                await apiClient.CreateAsync(product, CancellationToken.None);
+            }
 
-    [Theory]
-    [ClassData(typeof(ListProductsNegativeCases))]
-    public async Task List_InvalidParamaters_ThrowsException(ListProductTestCase testCase)
-    {
-        _outputHelper.WriteLine(testCase.TestId);
-        _outputHelper.WriteLine(testCase.Description);
+            // Act:
+            var result = await apiClient.ListAsync(testCase.Parameters.Request, CancellationToken.None);
 
-        // ARRANGE 
-        var httpClient = _applicationFactory.CreateClient();
-        var productsApiClient = new ProductsApiClient(httpClient);
-
-        // ACT
-        var error = await productsApiClient.Invoking(c => c.ListAsync(testCase.Parameters.Request, CancellationToken.None))
-                                           .Should()
-                                           .ThrowAsync<ApiException>();
-
-        // ASSERT
-        error.Which.Code.Should().Be(testCase.Expectations.HttpStatusCode);
-        error.Which.Message.Should().Be(testCase.Expectations.Error);
-    }
-
-    /// <summary>
-    ///     Настраивает состояние БД перед прогоном тестов
-    /// </summary>
-    private async Task<ProductDto[]> ArrangeStorageState(ProductsStorageState storageState, ProductsApiClient productsApiClient)
-    {
-        var result = new List<ProductDto>();
-        foreach (var product in storageState.Products)
-        {
-            var productDto = await productsApiClient.CreateAsync(product, CancellationToken.None);
-            result.Add(productDto);
+            // Assert:
+            foreach (var inc in testCase.Expectations.IncludedProducts)
+            {
+                result.Should().ContainEquivalentOf(inc, opts => opts.Excluding(dto => dto.Id));
+            }
+            foreach (var exc in testCase.Expectations.ExcludedProducts)
+            {
+                result.Should().NotContainEquivalentOf(exc, opts => opts.Excluding(dto => dto.Id));
+            }
         }
 
-        return result.ToArray();
-    }
+        [Theory(DisplayName = "ListProduct_InvalidParams_ThrowsError")]
+        [ClassData(typeof(ListProductsNegativeCases))]
+        public async Task ListProduct_InvalidParams_ThrowsError(ListProductTestCase testCase)
+        {
+            // Arrange:
+            _output.WriteLine(testCase.TestId);
+            _output.WriteLine(testCase.Description);
+            var httpClient = _factory.CreateClient();
+            var apiClient = new ProductsApiClient(httpClient);
 
-    /// <summary>
-    ///     Поднимает контект приложения, возвращает сконфигурированный клиент
-    /// </summary>
-    private ProductsApiClient CreateClient()
-    {
-        var httpClient = _applicationFactory.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton(_timeProviderMock.Object)))
-                                  .CreateClient();
-        return new ProductsApiClient(httpClient);
-    }
+            // Act:
+            var exception = await Assert.ThrowsAsync<ApiException>(() =>
+                apiClient.ListAsync(testCase.Parameters.Request, CancellationToken.None));
 
-    /// <summary>
-    ///     Настраивает моки
-    /// </summary>
-    private void ArrangeMocks(MocksData mocksData)
-    {
-        _timeProviderMock.Setup(provider => provider.GetUtcNow()).Returns(mocksData.UtcNow);
+            // Assert:
+            exception.Code.Should().Be(testCase.Expectations.HttpStatusCode);
+            exception.Message.Should().Be(testCase.Expectations.Error);
+        }
+
+        private ProductsApiClient CreateClient()
+        {
+            var httpClient = _factory.WithWebHostBuilder(b => b.ConfigureTestServices(services =>
+                services.AddSingleton(_timeProviderMock.Object))).CreateClient();
+            return new ProductsApiClient(httpClient);
+        }
+
+        private void ArrangeMocks(MocksData mocksData)
+        {
+            _timeProviderMock.Setup(tp => tp.GetUtcNow()).Returns(mocksData.UtcNow);
+        }
     }
 }
